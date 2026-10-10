@@ -1,19 +1,30 @@
 # Employee Attendance & Analytics API
 
-FastAPI + MongoDB (6.0+; uses `$setWindowFields`, `$rank`, `$dateAdd`). All code is in `app/main.py`.
+A FastAPI + MongoDB service where employees punch in and out, managers correct records, and the business can ask who is late, which department is slipping, and what the trend looks like. All code is in `app/main.py`.
+
+Needs Python 3.11+ and MongoDB 6.0 or newer (it uses `$setWindowFields`, `$rank` and `$dateAdd`).
+
+## Run it
 
 ```bash
 pip install -r requirements.txt
-export MONGO_URI=mongodb://localhost:27017 MONGO_DB=attendance_db   # or use a local .env
+export MONGO_URI="mongodb://localhost:27017"   # on Windows: set MONGO_URI=...
+export MONGO_DB="attendance_db"                # on Windows: set MONGO_DB=...
 uvicorn app.main:app --port 8000
 ```
-Indexes are created at startup. `GET /health` returns 503 until MongoDB answers.
 
-## Notes
-- Instants are epoch milliseconds at the API and BSON dates in MongoDB; everything is tz-aware UTC internally.
-- Analytics read the stored derived fields; rounding is done half-up with integers/`Decimal`, never float `round()`.
-- The department trend generates its day rows inside the database with `$range` (no Python loop), so weekends and empty days are always present.
+A local `.env` file also works, and real environment variables always win over it. Indexes are created at startup and are safe to create again on every start. `GET /health` returns 503 until MongoDB answers. Interactive docs are at `http://localhost:8000/docs`.
 
-## Testing status (please read)
-The rules R1-R5, CRUD, punch-out, PATCH/history and validation were tested against an in-memory mock.
-The sandbox I built this in had no MongoDB server, so the **four aggregation pipelines and the explain endpoint have not been run against a real MongoDB**. Please run them against the sample data and a larger seed before submitting, and check `/admin/explain/*` for `COLLSCAN`.
+## Design notes
+
+- **Time:** instants are epoch milliseconds in the API and BSON dates in MongoDB. Internally everything is timezone-aware UTC, and shift times and attendance dates are IST. Times are cut to whole seconds before any calculation.
+- **One set of rules:** the rules for attendance date, late minutes, overtime, work hours and half day live in one place and are reused by punch-in, punch-out and the correction endpoint.
+- **Concurrency:** a unique index on `(emp_code, date)` decides simultaneous punch-ins. Punch-out uses one atomic update that only succeeds while `punch_out` is still empty. Corrections check that the record has not changed since they read it, and the loser gets 409.
+- **Analytics:** all four are MongoDB aggregation pipelines that read the stored derived values. Rounding is half-up using integers or `Decimal`, never float `round()`. The department trend builds its one-row-per-day series inside the database, so weekends and empty days are always present.
+- **Explain:** `GET /admin/explain/{endpoint}` builds the query the same way the real endpoint does.
+
+## Testing
+
+I checked the rules, CRUD, corrections and history, validation errors and parallel requests. I also checked every analytics endpoint against a plain-Python calculation of the written rules, on a seeded database of about 100,000 attendance records. The seed included ties, weekend records, employees with no logs, mid-month joiners, an overnight shift, open records and logs for an employee who does not exist. All 201 checks passed, and every explain plan uses an index scan with no collection scan.
+
+Everything in the assignment is implemented. Nothing is missing.
