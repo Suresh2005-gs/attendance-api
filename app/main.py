@@ -182,9 +182,7 @@ def check_out_after_in(p_in: datetime, p_out: datetime):
         raise HTTPException(422, "punch_out is more than 24 hours after punch_in")
 
 
-# --------------------------------------------------------------------------- #
-# Serialization (Mongo document -> API shape)
-# --------------------------------------------------------------------------- #
+
 TIME_FIELDS = ("punch_in", "punch_out")
 
 
@@ -231,9 +229,7 @@ def employee_out(d: dict) -> dict:
     }
 
 
-# --------------------------------------------------------------------------- #
-# 3. Models
-# --------------------------------------------------------------------------- #
+
 class EmployeeIn(BaseModel):
     emp_code: str = Field(pattern=r"^EMP[0-9]{4,6}$")
     name: str = Field(min_length=1, max_length=100)
@@ -277,9 +273,7 @@ class RegularizeIn(BaseModel):
     regularized_by: str = Field(min_length=1, max_length=50)
 
 
-# --------------------------------------------------------------------------- #
-# 4. Indexes (idempotent; run at startup)
-# --------------------------------------------------------------------------- #
+
 INDEXES = [
     # (collection, keys, options)
     ("employees", [("emp_code", ASCENDING)], {"unique": True, "name": "emp_code_unique"}),
@@ -316,9 +310,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="Employee Attendance & Analytics API", version="2.0.0", lifespan=lifespan)
 
 
-# --------------------------------------------------------------------------- #
-# 5. Endpoints: system, employees, attendance
-# --------------------------------------------------------------------------- #
+# API endpoints
 @app.get("/health")
 def health():
     try:
@@ -507,9 +499,7 @@ def regularize(emp_code: str, date: str, body: RegularizeIn):
     return record_out(updated)
 
 
-# --------------------------------------------------------------------------- #
-# 6. Aggregation pipelines
-# --------------------------------------------------------------------------- #
+# Analytics aggregation pipelines
 def _round_half_up(x: Decimal, places: str) -> float:
     return float(x.quantize(Decimal(places), rounding=ROUND_HALF_UP))
 
@@ -749,9 +739,7 @@ def department_trend(department: str, from_: str = Query(..., alias="from"), to:
     return {"department": department, "items": items}
 
 
-# --------------------------------------------------------------------------- #
-# 7. Explain (same builders as the endpoints above)
-# --------------------------------------------------------------------------- #
+# Query execution plans
 def _need(**vals):
     missing = [k for k, v in vals.items() if v is None]
     if missing:
